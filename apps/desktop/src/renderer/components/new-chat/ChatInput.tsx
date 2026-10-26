@@ -2838,12 +2838,14 @@ export function ChatInput({
           return true;
         }
 
-        // Shift/Alt+Enter — split or exit a structured item. The plain-text
-        // fallback remains for old drafts and pasted Markdown that has not
-        // gone through an input rule.
+        // Newline keys split or exit a list item, including bare Enter when
+        // sending requires a modifier. The plain-text fallback remains for old
+        // drafts and pasted Markdown that has not gone through an input rule.
         if (
           event.key === 'Enter' &&
-          (event.shiftKey || event.altKey) &&
+          (event.shiftKey ||
+            event.altKey ||
+            getComposerSendShortcutPreference() === 'modifier-enter') &&
           !event.metaKey &&
           !event.ctrlKey &&
           !event.isComposing
