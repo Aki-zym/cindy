@@ -236,6 +236,62 @@ it.each([
   expect(onSend.mock.calls[0][0]).toBe(scenario.markdown);
 });
 
+// #7231 review: list-looking code must survive newline and send unchanged.
+// Cover native paragraph breaks and existing soft-break drafts in this harness.
+it.each([
+  { fence: '```', marker: '- value', softBreak: false },
+  { fence: '~~~', marker: '1. value', softBreak: true },
+])('keeps code literal across Enter with $fence (softBreak=$softBreak)', async scenario => {
+  localStorage.setItem(COMPOSER_SEND_SHORTCUT_STORAGE_KEY, 'modifier-enter');
+  _resetComposerSendShortcutPreferenceForTests();
+  h.localProviders = [sshNativeCodexProvider([sshModel('gpt-6-astra')])];
+  const onSend = vi.fn().mockResolvedValue(true);
+  render(<ChatInput {...queueShortcutProps} pendingQueue={[]} onSend={onSend} />);
+  await waitFor(() => expect(h.editor).not.toBeNull());
+  await act(async () => {
+    const lines = [scenario.fence, scenario.marker];
+    h.editor!.commands.setContent({
+      type: 'doc',
+      content: scenario.softBreak
+        ? [{ type: 'paragraph', content: [
+            { type: 'text', text: lines[0] }, { type: 'hardBreak' }, { type: 'text', text: lines[1] },
+          ] }]
+        : lines.map(text => ({ type: 'paragraph', content: [{ type: 'text', text }] })),
+    });
+    h.editor!.commands.focus('end');
+    fireEvent.keyDown(h.editor!.view.dom, { key: 'Enter', code: 'Enter' });
+  });
+  const doc = h.editor!.state.doc;
+  expect(doc.textBetween(0, doc.content.size, '\n', '\n')).toBe(`${scenario.fence}\n${scenario.marker}\n`);
+  expect(onSend).not.toHaveBeenCalled();
+  await act(async () => {
+    h.editor!.commands.insertContent(scenario.fence);
+    fireEvent.keyDown(h.editor!.view.dom, { key: 'Enter', code: 'Enter', metaKey: true });
+  });
+  await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+  expect(onSend.mock.calls[0][0]).toBe(`${scenario.fence}\n${scenario.marker}\n${scenario.fence}`);
+});
+
+it('resumes plain list continuation after a fence closes within the current paragraph', async () => {
+  localStorage.setItem(COMPOSER_SEND_SHORTCUT_STORAGE_KEY, 'modifier-enter');
+  _resetComposerSendShortcutPreferenceForTests();
+  render(<ChatInput {...queueShortcutProps} pendingQueue={[]} onSend={vi.fn()} />);
+  await waitFor(() => expect(h.editor).not.toBeNull());
+  await act(async () => {
+    h.editor!.commands.setContent({ type: 'doc', content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '```' }] },
+      { type: 'paragraph', content: [
+        { type: 'text', text: 'code' }, { type: 'hardBreak' },
+        { type: 'text', text: '```' }, { type: 'hardBreak' }, { type: 'text', text: '- First' },
+      ] },
+    ] });
+    h.editor!.commands.focus('end');
+    fireEvent.keyDown(h.editor!.view.dom, { key: 'Enter', code: 'Enter' });
+  });
+  const doc = h.editor!.state.doc;
+  expect(doc.textBetween(0, doc.content.size, '\n', '\n')).toBe('```\ncode\n```\n- First\n- ');
+});
+
 it('exits an empty list item with Enter in modifier-enter mode', async () => {
   localStorage.setItem(COMPOSER_SEND_SHORTCUT_STORAGE_KEY, 'modifier-enter');
   _resetComposerSendShortcutPreferenceForTests();

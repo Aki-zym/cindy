@@ -27,6 +27,10 @@ export default {
     'src/renderer/voice-input/useVoiceInput': `import { useState, useRef } from 'react'; export function useVoiceInput(editor) { const [state, setState] = useState('idle'); const current = useRef(state); const update = value => { current.current = value; setState(value); }; return { state, getState: () => current.current, isListening: state === 'listening', isBusy: state !== 'idle', draftText: '', start: () => { update('listening'); return true; }, stop: async () => { update('idle'); editor?.commands.setContent('<p>Dictated message</p>'); }, cancel: async () => update('idle') }; }`,
   },
   cases: {
+    'fenced-newline': {
+      about: 'List-looking code stays literal on Enter and modifier-send; closing a code fence restores list continuation',
+      storage: { 'chat.sendShortcutPreference': 'modifier-enter' },
+    },
     'list-newline': {
       about: 'Enter continues ordered/bullet lists in modifier-send mode, empty items exit, and modifier+Enter sends Markdown',
       storage: { 'chat.sendShortcutPreference': 'modifier-enter' },
@@ -48,6 +52,35 @@ export default {
     await page.locator('[contenteditable="true"]').waitFor();
   },
   async check(page, ui) {
+    if (ui.case === 'fenced-newline') {
+      const editor = page.locator('.ProseMirror');
+      await editor.click();
+      await editor.pressSequentially('```');
+      await editor.press('Enter');
+      await editor.pressSequentially('- value');
+      await editor.press('Enter');
+      await editor.pressSequentially('1. value');
+      await editor.press('Enter');
+      await editor.pressSequentially('```');
+      await ui.capture('literal-code');
+      await editor.press('ControlOrMeta+Enter');
+      await page.waitForFunction(() =>
+        document.querySelector('[data-testid="sent"]')?.textContent === '```\n- value\n1. value\n```',
+      );
+      await editor.click();
+      await editor.pressSequentially('```');
+      await editor.press('Enter');
+      await editor.pressSequentially('code');
+      await editor.press('Enter');
+      await editor.pressSequentially('```');
+      await editor.press('Enter');
+      await editor.pressSequentially('- First');
+      await editor.press('Enter');
+      await editor.pressSequentially('Second');
+      assert.equal(await editor.locator('ul > li').count(), 2);
+      await ui.capture('list-after-code');
+      return;
+    }
     if (ui.case === 'list-newline') {
       const editor = page.locator('.ProseMirror');
       await editor.click();

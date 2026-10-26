@@ -42,6 +42,7 @@ import {
   ComposerOrderedList,
   handleStructuredListBackspace,
   handleStructuredListBreak,
+  isComposerCaretInsideCodeFence,
   hasTrailingPlainListParagraph,
   isTopLevelBlockSelection,
   isTrailingEmptyTopLevelParagraph,
@@ -2850,7 +2851,10 @@ export function ChatInput({
           !event.ctrlKey &&
           !event.isComposing
         ) {
-          if (handleStructuredListBreak(view) || applyListContinuation(view)) {
+          if (
+            handleStructuredListBreak(view) ||
+            (!isComposerCaretInsideCodeFence(view) && applyListContinuation(view))
+          ) {
             event.preventDefault();
             return true;
           }
